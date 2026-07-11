@@ -59,7 +59,7 @@ export default function Home() {
       <section className="moments">
         <p className="section-no">03 / SMALL MOMENTS</p>
         <blockquote>“You come for the animals.<br/>You remember <em>the feeling.</em>”</blockquote>
-        <div className="moment-grid"><figure><div className="photo one"/><figcaption>05:42 — coffee, canvas, first light</figcaption></figure><figure><div className="photo two"/><figcaption>18:17 — a dhow catches the last sun</figcaption></figure><figure><div className="photo three"/><figcaption>22:06 — the Milky Way, uninterrupted</figcaption></figure></div>
+        <div className="moment-grid"><figure><div className="photo one"/><figcaption>05:42 — coffee, canvas, first light</figcaption></figure><figure><div className="photo two"/><figcaption>18:17 — the coast catches the last light</figcaption></figure><figure><div className="photo three"/><figcaption>22:06 — the Milky Way, uninterrupted</figcaption></figure></div>
       </section>
 
       <section className="shape" id="shape">
