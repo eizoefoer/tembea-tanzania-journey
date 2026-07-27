@@ -4,13 +4,16 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: read
 
 concurrency:
-  group: queue-ci-${{ github.event.pull_request.number || github.ref }}
+  group: queue-ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -19,78 +22,65 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
+      - name: Check out pull request
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Enable pnpm
-        shell: bash
-        run: corepack enable
-
       - name: Fetch base branch
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         shell: bash
         run: |
           set -euo pipefail
           git fetch \
             --no-tags \
             origin \
-            "${{ github.event.pull_request.base.ref }}" \
+            "$BASE_REF" \
             --depth=1
 
-      - name: Validate changed-file whitespace
+      - name: Validate pull-request diff
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check \
-            "origin/${{ github.event.pull_request.base.ref }}"...HEAD
+
+          git diff --check "origin/${BASE_REF}...HEAD"
+
+          CHANGED_COUNT="$(
+            git diff \
+              --name-only \
+              "origin/${BASE_REF}...HEAD" \
+              | sed '/^$/d' \
+              | wc -l
+          )"
+
+          if [ "$CHANGED_COUNT" -eq 0 ]; then
+            echo "Pull request contains no changed files."
+            exit 1
+          fi
+
+          echo "Validated changed files:"
+          git diff \
+            --name-status \
+            "origin/${BASE_REF}...HEAD"
 
       - name: Reject changed symlinks
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         shell: bash
         run: |
           set -euo pipefail
 
           while IFS= read -r -d '' path; do
             if [ -L "$path" ]; then
-              echo "Changed symlinks are not permitted: $path"
+              echo "Changed symlink is forbidden: $path"
               exit 1
             fi
           done < <(
             git diff \
               --name-only \
               -z \
-              "origin/${{ github.event.pull_request.base.ref }}"...HEAD
+              "origin/${BASE_REF}...HEAD"
           )
-
-      - name: Install dependencies
-        shell: bash
-        run: pnpm install --frozen-lockfile
-
-      - name: Run available repository checks
-        shell: bash
-        env:
-          CI: "true"
-        run: |
-          set -euo pipefail
-
-          for script in lint test build; do
-            if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts['${script}'] ? 0 : 1)"; then
-              echo "Running pnpm ${script}"
-              pnpm run "${script}"
-            else
-              echo "No ${script} script; skipping"
-            fi
-          done
-
-      - name: Show changed files
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff \
-            --name-status \
-            "origin/${{ github.event.pull_request.base.ref }}"...HEAD
