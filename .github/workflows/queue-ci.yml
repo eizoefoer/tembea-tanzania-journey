@@ -1,0 +1,70 @@
+name: Queue CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: queue-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: queue-ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch pull-request base
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch \
+            --no-tags \
+            origin \
+            "${{ github.event.pull_request.base.ref }}" \
+            --depth=1
+
+      - name: Validate changed-file whitespace
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git diff --check \
+            "origin/${{ github.event.pull_request.base.ref }}"...HEAD
+
+      - name: Reject changed symlinks
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          while IFS= read -r -d '' path; do
+            if [ -L "$path" ]; then
+              echo "Changed symlinks are not permitted: $path"
+              exit 1
+            fi
+          done < <(
+            git diff \
+              --name-only \
+              -z \
+              "origin/${{ github.event.pull_request.base.ref }}"...HEAD
+          )
+
+      - name: Show changed files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git diff \
+            --name-status \
+            "origin/${{ github.event.pull_request.base.ref }}"...HEAD
